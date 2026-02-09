@@ -1,21 +1,32 @@
 # LCM Network Monitor
 
-A performance-oriented real-time monitoring and visualization tool for [LCM (Lightweight Communications and Marshalling)](https://lcm-proj.github.io/) network traffic.
+A Python-based network monitor for [LCM (Lightweight Communications and Marshalling)](https://lcm-proj.github.io/) traffic, based on the original lcm-spy tool. Created for systems where Java dependencies are problematic or unavailable.
 
-## Features
+## Description
 
-- **Real-time Traffic Overview**: Monitor channel names, message types, frequencies (Hz), jitter, and bandwidth usage
-- **Dynamic Type Discovery**: Automatically discover and load LCM message types from Python modules at runtime
-- **Recursive Inspector**: Deeply inspect nested LCM message structures using a tree view
-- **Live Plotting**: Visualize numeric fields from LCM messages in real-time
-- **Thread-Safe Architecture**: Decoupled network handling and UI rendering for high-performance monitoring
-- **Professional UI**: Dark theme, toolbar, keyboard shortcuts, sortable tables, and more
+This is a Python implementation of lcm-spy functionality using PyQt5 and pyqtgraph. It monitors LCM network traffic and provides:
 
-## Background & Motivation
+- Real-time traffic overview with channel statistics (message counts, frequencies, jitter, bandwidth)
+- Dynamic LCM type discovery and loading from Python modules
+- Message inspector with recursive tree view of message fields
+- Live plotting of numeric message fields
+- Dark theme UI with sortable tables, search, and keyboard shortcuts
 
-This project is a partial Python-based port of the original [lcm-spy](https://lcm-proj.github.io/group__LcmPy__lcm__spy.html) utility. It was developed to provide a lightweight, pure-Python alternative when environment updates caused compatibility issues with the standard Java-based implementation.
+## Screenshots
 
-While inspired by the excellent work of the original LCM project authors, this tool focuses on providing a modern, Pythonic debugging experience using PyQt5 and pyqtgraph.
+### Main Window
+![Main Window](screenshots/main_window.png)
+
+Main window showing active LCM channels with statistics. Double-click column headers to sort.
+
+### Message Inspector
+![Message Inspector](screenshots/inspector.png)
+
+Inspector window with tree view of message fields. Double-click numeric fields to plot.
+
+## Background
+
+Python port of the Java-based lcm-spy utility. Developed when Java package updates broke the original tool. Provides equivalent monitoring functionality using pure Python dependencies.
 
 ## Project Structure
 
@@ -40,43 +51,76 @@ lcm_monitor/
 
 ## Installation
 
-### Dependencies
+### Ubuntu/Debian
 
-- Python 3.6+
-- `lcm` - LCM Python bindings
-- `PyQt5` - GUI framework
-- `pyqtgraph` - Plotting library
-- `numpy` - Numerical computing
-
-Install Python dependencies:
+Install system dependencies:
 ```bash
-pip install PyQt5 pyqtgraph numpy
+sudo apt install python3-pyqt5 python3-pyqtgraph python3-numpy liblcm-dev python3-lcm git
 ```
 
-*Note: `lcm` must be installed separately according to the [LCM documentation](https://lcm-proj.github.io/).*
+Clone and install:
+```bash
+git clone https://github.com/mbsm/lcm-monitor.git
+cd lcm-monitor
+sudo pip3 install -e . --break-system-packages
+```
+
+Install desktop launcher:
+```bash
+sudo cp lcm.png /usr/share/pixmaps/lcm-network-monitor.png
+sudo tee /usr/share/applications/lcm-network-monitor.desktop > /dev/null << 'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=LCM Network Monitor
+Comment=Monitor and visualize LCM network traffic
+Exec=/usr/bin/python3 -m lcm_monitor
+Icon=/usr/share/pixmaps/lcm-network-monitor.png
+Terminal=false
+Categories=Development;Network;Utility;
+Keywords=LCM;Network;Monitor;Traffic;
+StartupNotify=true
+EOF
+sudo update-desktop-database /usr/share/applications/
+```
+
+Run from terminal:
+```bash
+python3 -m lcm_monitor
+```
+
+Or launch from applications menu: Search for "LCM Network Monitor"
+
+### Other Platforms
+
+Install dependencies according to the [LCM documentation](https://lcm-proj.github.io/), then:
+```bash
+pip install PyQt5 pyqtgraph numpy
+python3 -m lcm_monitor
+```
 
 ## Usage
 
 ### Running the Monitor
 
-**Recommended: As a Python module**
+As a Python module:
 ```bash
 python3 -m lcm_monitor
 ```
 
-**Alternative: Using run.py**
+Or using run.py:
 ```bash
 python3 run.py
 ```
 
 ### Command Line Options
 
-**Specify LCM URL:**
+Specify LCM URL:
 ```bash
 python3 -m lcm_monitor -u="udpm://239.255.76.67:7667?ttl=1"
 ```
 
-**Load LCM Types:**
+Load LCM types:
 ```bash
 python3 -m lcm_monitor -p=/path/to/lcmtypes/python
 ```
@@ -85,52 +129,47 @@ Or use **File > Import LCM Types** from the menu.
 
 ### Testing
 
-Generate sample LCM traffic:
+Generate sample traffic:
 ```bash
 python3 test.py
 ```
 
-*(Note: Adjust `sys.path` in `test.py` for your LCM types.)*
-
-## Features Guide
+## Usage Guide
 
 ### Main Window
-- **Toolbar**: Quick access to Import Types, Clear Statistics, Properties
-- **Table**: Click column headers to sort (double-click toggles order)
-- **Status Bar**: Connection indicator, channel count, total bandwidth
-- **Empty State**: Shows helpful message when no messages received
+- Toolbar: Import Types, Clear Statistics, Properties
+- Click column headers to sort
+- Status bar shows connection status, channel count, bandwidth
 
 ### Inspector Window  
-- **Search**: Filter fields in real-time
-- **Type Column**: Shows LCM type information
-- **Context Menu**: Right-click to copy values or field names
-- **Double-Click**: Opens plot window for numeric fields
-- **Escape**: Close window
+- Search bar filters fields
+- Right-click to copy values or field names
+- Double-click numeric fields to plot
+- Press Escape to close
 
 ### Plot Window
-- **Pause/Resume**: Freeze plot to examine data
-- **Sample Size**: Adjust history window (10-1000 samples)
-- **Current Value**: Displays latest value
-- **Escape**: Close window
+- Pause/Resume button freezes plot
+- Adjust sample size (10-1000)
+- Press Escape to close
 
 ### Keyboard Shortcuts
 - `Ctrl+I` - Import LCM Types
 - `Ctrl+K` - Clear Statistics  
-- `Ctrl+Q` - Exit Application
-- `Escape` - Close inspector/plot windows
+- `Ctrl+Q` - Exit
+- `Escape` - Close windows
 
-## Architecture
+## Technical Details
 
-- **Thread Safety**: `LCMMessageSpy.lock` protects shared data access
-- **Event Loop**: Background daemon thread handles LCM with 100ms timeout
-- **Dynamic Typing**: Recursive type discovery with retry on new imports
-- **Performance**: Polling at 1Hz, high-frequency LCM in separate thread
-- **Persistence**: Window geometry saved via `QSettings`
+- Thread-safe design with separate LCM handling thread
+- Dynamic type discovery with retry on new imports
+- 1Hz GUI polling (configurable), high-frequency LCM in background thread
+- Window geometry persistence via QSettings
 
 ## Author
 
-**Matias Bustos**
+Matias Bustos SM
+Feb 2026
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) file.

@@ -1,8 +1,73 @@
 # Installation Guide - LCM Network Monitor
 
-## Prerequisites
+## Ubuntu/Debian Installation
 
-### All Platforms
+### 1. Install System Dependencies
+
+```bash
+sudo apt update
+sudo apt install python3-pyqt5 python3-pyqtgraph python3-numpy liblcm-dev python3-lcm git
+```
+
+### 2. Clone Repository
+
+```bash
+git clone https://github.com/mbsm/lcm-monitor.git
+cd lcm-monitor
+```
+
+### 3. Install Application
+
+```bash
+sudo pip3 install -e . --break-system-packages
+```
+
+This installs in editable mode, so code changes take effect immediately without reinstalling.
+
+### 4. Install Desktop Launcher (Optional)
+
+```bash
+# Copy icon
+sudo cp lcm.png /usr/share/pixmaps/lcm-network-monitor.png
+
+# Create desktop entry
+sudo tee /usr/share/applications/lcm-network-monitor.desktop > /dev/null << 'EOF'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=LCM Network Monitor
+Comment=Monitor and visualize LCM network traffic
+Exec=/usr/bin/python3 -m lcm_monitor
+Icon=/usr/share/pixmaps/lcm-network-monitor.png
+Terminal=false
+Categories=Development;Network;Utility;
+Keywords=LCM;Network;Monitor;Traffic;
+StartupNotify=true
+EOF
+
+# Update desktop database
+sudo update-desktop-database /usr/share/applications/
+```
+
+### 5. Run the Application
+
+From terminal:
+```bash
+python3 -m lcm_monitor
+```
+
+Or search for "LCM Network Monitor" in your application menu.
+
+### Uninstall
+
+```bash
+sudo pip3 uninstall lcm-network-monitor --break-system-packages
+sudo rm /usr/share/applications/lcm-network-monitor.desktop
+sudo rm /usr/share/pixmaps/lcm-network-monitor.png
+sudo update-desktop-database /usr/share/applications/
+```
+
+## Prerequisites (All Platforms)
 1. **Python 3.7 or higher**
    ```bash
    python3 --version

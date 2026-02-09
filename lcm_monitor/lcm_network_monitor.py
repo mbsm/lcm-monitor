@@ -9,7 +9,7 @@ import lcm
 import pyqtgraph as pg
 from PyQt5.QtWidgets import (
     QMainWindow, QVBoxLayout, QLabel, QLineEdit, QPushButton, 
-    QAction, QFileDialog, QDialog, QApplication, qApp, QStackedWidget
+    QAction, QFileDialog, QDialog, QApplication, qApp, QStackedWidget, QStyle
 )
 from PyQt5.QtCore import QTimer, Qt, QSettings, QSize
 from PyQt5.QtGui import QColor, QKeySequence
@@ -92,9 +92,6 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.empty_label)
         self.setCentralWidget(self.stack)
         
-        # Menu
-        self._setup_menu()
-        
         # Status bar
         status_bar = self.statusBar()
         status_bar.showMessage('Ready', 5000)
@@ -120,7 +117,8 @@ class MainWindow(QMainWindow):
         toolbar.setIconSize(QSize(24, 24))
         
         # Import Types action
-        import_action = QAction("📁 Import Types", self)
+        import_action = QAction("Import Types", self)
+        import_action.setIcon(self.style().standardIcon(QStyle.SP_DirOpenIcon))
         import_action.setShortcut(QKeySequence("Ctrl+I"))
         import_action.setToolTip("Import LCM type definitions (Ctrl+I)")
         import_action.triggered.connect(self._import_types)
@@ -129,7 +127,8 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
         
         # Clear Statistics action
-        clear_action = QAction("🗑 Clear", self)
+        clear_action = QAction("Clear", self)
+        clear_action.setIcon(self.style().standardIcon(QStyle.SP_TrashIcon))
         clear_action.setShortcut(QKeySequence("Ctrl+K"))
         clear_action.setToolTip("Clear all statistics (Ctrl+K)")
         clear_action.triggered.connect(self._clear_statistics)
@@ -138,10 +137,49 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
         
         # Properties action
-        props_action = QAction("⚙ Properties", self)
+        props_action = QAction("Properties", self)
+        props_action.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
         props_action.setToolTip("Configure monitor settings")
         props_action.triggered.connect(self._show_properties_dialog)
         toolbar.addAction(props_action)
+    
+    def _sort_data(self, data, column, ascending=True):
+        """Sort data by specified column.
+        
+        Args:
+            data: List of dictionaries to sort
+            column: Column index to sort by
+            ascending: Sort in ascending order if True
+            
+        Returns:
+            Sorted list of dictionaries
+        """
+        headers = ["Channel", "Type", "Num Msgs", "Hz", "1/Hz", "Jitter", "Bandwidth", "Decodable"]
+        if column >= len(headers):
+            return data
+        
+        column_name = headers[column]
+        
+        # Sort data (make a copy to avoid modifying original)
+        sorted_data = list(data)
+        
+        if column_name in ["Num Msgs"]:
+            # Numeric columns
+            sorted_data.sort(key=lambda x: x.get(column_name, 0), reverse=not ascending)
+        elif column_name in ["Hz", "1/Hz", "Jitter", "Bandwidth"]:
+            # Extract numeric part from formatted strings
+            def extract_number(x):
+                val = x.get(column_name, "0")
+                try:
+                    return float(str(val).split()[0])
+                except:
+                    return 0
+            sorted_data.sort(key=extract_number, reverse=not ascending)
+        else:
+            # String columns
+            sorted_data.sort(key=lambda x: x.get(column_name, ""), reverse=not ascending)
+        
+        return sorted_data
     
     def _sort_by_column(self, column):
         """Sort table by double-clicked column header."""
@@ -152,68 +190,8 @@ class MainWindow(QMainWindow):
             self.sort_ascending = True
             self.current_sort_column = column
         
-        # Get column name
-        headers = ["Channel", "Type", "Num Msgs", "Hz", "1/Hz", "Jitter", "Bandwidth", "Decodable"]
-        if column >= len(headers):
-            return
-        
-        column_name = headers[column]
-        data = self.spy.traffic_data()
-        
-        # Sort data
-        if column_name in ["Num Msgs"]:
-            # Numeric columns
-            data.sort(key=lambda x: x.get(column_name, 0), reverse=not self.sort_ascending)
-        elif column_name in ["Hz", "1/Hz", "Jitter", "Bandwidth"]:
-            # Extract numeric part from formatted strings
-            def extract_number(x):
-                val = x.get(column_name, "0")
-                try:
-                    return float(str(val).split()[0])
-                except:
-                    return 0
-            data.sort(key=extract_number, reverse=not self.sort_ascending)
-        else:
-            # String columns
-            data.sort(key=lambda x: x.get(column_name, ""), reverse=not self.sort_ascending)
-        
-        # Update table
-        self.traffic_table.setData(data)
-        self._apply_table_formatting()
-    
-    def _setup_menu(self):
-        """Setup application menu bar."""
-        menu_bar = self.menuBar()
-        file_menu = menu_bar.addMenu('File')
-        
-        # Import types action
-        import_action = QAction('Import LCM Types', self)
-        import_action.setShortcut(QKeySequence('Ctrl+I'))
-        import_action.setStatusTip('Load LCM type definitions from directory')
-        import_action.triggered.connect(self._import_types)
-        file_menu.addAction(import_action)
-        
-        # Properties action
-        properties_action = QAction('Properties', self)
-        properties_action.setStatusTip('Configure monitor settings')
-        properties_action.triggered.connect(self._show_properties_dialog)
-        file_menu.addAction(properties_action)
-        
-        # Clear action
-        clear_action = QAction('Clear Statistics', self)
-        clear_action.setShortcut(QKeySequence('Ctrl+K'))
-        clear_action.setStatusTip('Clear all accumulated statistics')
-        clear_action.triggered.connect(self._clear_statistics)
-        file_menu.addAction(clear_action)
-        
-        file_menu.addSeparator()
-        
-        # Exit action
-        exit_action = QAction('Exit', self)
-        exit_action.setShortcut(QKeySequence('Ctrl+Q'))
-        exit_action.setStatusTip('Exit application')
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
+        # Force immediate update with new sort order
+        self._update_display()
     
     def _import_types(self):
         """Open dialog to select and import LCM type directory."""
@@ -271,6 +249,10 @@ class MainWindow(QMainWindow):
     def _update_display(self):
         """Update main window display with latest statistics."""
         data = self.spy.traffic_data()
+        
+        # Apply current sort order if set
+        if self.current_sort_column is not None:
+            data = self._sort_data(data, self.current_sort_column, self.sort_ascending)
         
         # Show empty state or table
         with self.spy.lock:

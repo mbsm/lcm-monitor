@@ -114,8 +114,19 @@ class PlotWindow(QWidget):
         if msg is None:
             return
 
-        if hasattr(msg, self.field_name):
-            value = getattr(msg, self.field_name)
+        try:
+            # Navigate through field path (handles nested fields and array indices)
+            value = msg
+            parts = self.field_name.split('.')
+            for part in parts:
+                if part.startswith('[') and part.endswith(']'):
+                    # Array index
+                    index = int(part[1:-1])
+                    value = value[index]
+                else:
+                    # Attribute
+                    value = getattr(value, part)
+            
             self.data.append(value)
             self.line.setData(list(self.data))
             
@@ -124,5 +135,5 @@ class PlotWindow(QWidget):
                 self.current_value_label.setText(f"Current: {value:.4f}")
             else:
                 self.current_value_label.setText(f"Current: {value}")
-        else:
-            print(f"Message no longer has attribute: {self.field_name}")
+        except (AttributeError, IndexError, ValueError) as e:
+            print(f"Cannot access field '{self.field_name}': {e}")

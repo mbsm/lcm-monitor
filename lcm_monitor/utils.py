@@ -44,6 +44,7 @@ def fill_qtreeitem_with_lcm(tree_item, lcm_message):
                 child_item.setText(2, f"{typename}{dimension}")
                 for j, elem in enumerate(value):
                     elem_item = QTreeWidgetItem()
+                    elem_item.setText(0, f"[{j}]")  # Set index as field name
                     if hasattr(elem, '__slots__') and hasattr(elem, '__typenames__') and hasattr(elem, '__dimensions__'):
                         fill_qtreeitem_with_lcm(elem_item, elem)
                     else:

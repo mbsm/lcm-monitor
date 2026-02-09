@@ -21,6 +21,9 @@ class MessageInspectorWindow(QWidget):
         self.setWindowTitle(f"Inspector - {self.channel}")
         self.setMinimumSize(500, 400)
         
+        # Keep track of plot windows to prevent garbage collection
+        self.plot_windows = []
+        
         # Search bar
         self.search_box = QLineEdit()
         self.search_box.setPlaceholderText("Search fields...")
@@ -108,29 +111,65 @@ class MessageInspectorWindow(QWidget):
         for i in range(root.childCount()):
             filter_item(root.child(i), text)
 
-    def _plot_window(self):
-        """Open plot window for selected numeric field on double-click."""
+    def _plot_window(self, item, column):
+        """Open plot window for selected numeric field on double-click.
+        
+        Args:
+            item: QTreeWidgetItem that was double-clicked
+            column: Column index that was double-clicked
+        """
         # Import here to avoid circular dependency
         from .plot_window import PlotWindow
         
-        item = self.tree.currentItem()
         if not item:
             return
-            
-        var_name = item.text(0)
-        if var_name == self.channel:
+        
+        # Build full field path from tree hierarchy
+        path_parts = []
+        current = item
+        while current is not None:
+            field_name = current.text(0)
+            if field_name and field_name != self.channel:
+                path_parts.insert(0, field_name)
+            parent = current.parent()
+            # Stop at invisible root (parent returns the root item for top-level items)
+            if parent is None or parent.text(0) == '':
+                break
+            current = parent
+        
+        if not path_parts:
             return
         
+        # Get the message
         with self.spy.lock:
             msg = self.spy.msg.get(self.channel)
         
         if msg is None:
             return
         
-        if hasattr(msg, var_name):
-            PlotWindow(self.spy, self.channel, var_name)
-        else:
-            print(f"Message has no attribute: {var_name}")
+        # Navigate to the field/value
+        try:
+            value = msg
+            full_path = []
+            for part in path_parts:
+                full_path.append(part)
+                if part.startswith('[') and part.endswith(']'):
+                    # Array index
+                    index = int(part[1:-1])
+                    value = value[index]
+                else:
+                    # Attribute
+                    value = getattr(value, part)
+            
+            # Check if value is numeric (plottable)
+            if isinstance(value, (int, float)):
+                field_path = '.'.join(full_path)
+                plot_window = PlotWindow(self.spy, self.channel, field_path)
+                self.plot_windows.append(plot_window)
+            else:
+                print(f"Field '{'.'.join(full_path)}' is not numeric (type: {type(value).__name__})")
+        except (AttributeError, IndexError, ValueError) as e:
+            print(f"Cannot access field: {e}")
    
     def update(self):
         """Update tree with latest message contents."""

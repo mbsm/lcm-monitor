@@ -76,21 +76,19 @@ Keywords=LCM;Network;Monitor;Traffic;
 setup(
     name='lcm-network-monitor',
     version=VERSION,
-    author='Your Name',
-    author_email='your.email@example.com',
-    description='Real-time LCM network traffic monitor and visualizer',
+    author='Matias Bustos',
+    author_email='',
+    description='Python-based LCM network traffic monitor (lcm-spy alternative)',
     long_description=long_description,
     long_description_content_type='text/markdown',
-    url='https://github.com/yourusername/lcm_monitor',
-    py_modules=['lcm_network_monitor', 'test'],
-    python_requires='>=3.7',
+    url='https://github.com/mbsm/lcm-monitor',
+    packages=find_packages(),
+    python_requires='>=3.6',
     install_requires=[
         'numpy>=1.20.0',
         'PyQt5>=5.15.0',
         'pyqtgraph>=0.12.0',
         # Note: LCM needs to be installed separately as it's not on PyPI
-        # Users should install via: sudo apt install liblcm-dev python3-lcm
-        # or build from source: https://github.com/lcm-proj/lcm
     ],
     extras_require={
         'dev': [
@@ -101,8 +99,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'lcm-monitor=lcm_network_monitor:main',
-            'lcm-test=test:main',
+            'lcm-monitor=lcm_monitor.lcm_network_monitor:main',
         ],
     },
     cmdclass={
@@ -125,7 +122,6 @@ setup(
     ],
     keywords='lcm network monitor traffic visualization robotics',
     project_urls={
-        'Bug Reports': 'https://github.com/yourusername/lcm_monitor/issues',
-        'Source': 'https://github.com/yourusername/lcm_monitor',
+        'Source': 'https://github.com/mbsm/lcm-monitor',
     },
 )
