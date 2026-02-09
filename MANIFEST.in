@@ -1,0 +1,14 @@
+# Include documentation and license
+include README.md
+include LICENSE
+include .github/copilot-instructions.md
+
+# Include the icon if present
+include lcm.png
+
+# Exclude development files
+exclude .gitignore
+exclude CODE_INSPECTION_REPORT.md
+exclude lcm_network_monitor.py.backup
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]

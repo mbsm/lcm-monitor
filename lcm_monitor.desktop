@@ -1,6 +1,0 @@
-[Desktop Entry]
-Version=1.0
-Name="LCM Network Monitor"
-Type=Application
-Icon=/home/mbustos/agv1/ideas/lcm_monitor/lcm.png
-Exec=/home/mbustos/agv1/ideas/lcm_monitor/lcm_network_monitor.py

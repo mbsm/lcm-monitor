@@ -1,14 +1,31 @@
+#!/usr/bin/env python3
+"""LCM traffic simulator for testing the network monitor.
+
+Note: This requires LCM message types (gps_t, state_t) to be installed
+or available in your Python path. Update the imports below based on
+your LCM types package structure.
+"""
 import lcm
-import sys 
+import sys
 import random
 import time
 
-from pathlib import Path
-home = str(Path.home())
+# Example: If your LCM types are in a package, import them here
+# Uncomment and modify the following lines based on your setup:
+# from your_lcm_package.gps_t import gps_t
+# from your_lcm_package.state_t import state_t
 
-sys.path.insert(0, home + '/agv1/agv1msg/')
-from gps_t import *
-from state_t import *
+# For development with local types, you can add to path:
+# import os
+# sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'lcm_types'))
+
+try:
+    from gps_t import gps_t
+    from state_t import state_t
+except ImportError:
+    print("Error: LCM message types not found.")
+    print("Please install your LCM types package or update sys.path in this file.")
+    sys.exit(1)
 
 
 
@@ -58,4 +75,36 @@ while True:
     lc.publish("gps", gps.encode())
     lc.publish("state", state.encode())
     rate.sleep()
+
+
+def main():
+    """Entry point for lcm-test command."""
+    print("Starting LCM test traffic generator...")
+    print("Publishing on channels: gps, state")
+    print("Press Ctrl+C to stop")
+    
+    lc = lcm.LCM()
+    rate = Rate(100)
+    
+    try:
+        while True:
+            gps = gps_t()
+            gps.fix = 4
+            gps.latitude = 123456
+            gps.longitude = 456786
+            gps.altitude = 0
+            gps.heading = 147
+            gps.ground_speed = 2.25 + random.random()
+            
+            state = state_t()
+            
+            lc.publish("gps", gps.encode())
+            lc.publish("state", state.encode())
+            rate.sleep()
+    except KeyboardInterrupt:
+        print("\nStopped.")
+
+
+if __name__ == '__main__':
+    main()
     
