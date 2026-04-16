@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "Real-time LCM network traffic monitor and visualizer"
 readme = "README.md"
 requires-python = ">=3.7"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Matias Bustos", email = "matias.bustos.sm@outlook.com"}
 ]
@@ -17,7 +17,6 @@ classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Topic :: System :: Monitoring",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
@@ -41,6 +40,9 @@ Repository = "https://github.com/mbsm/lcm-monitor"
 
 [project.scripts]
 lcm-monitor = "lcm_monitor.lcm_network_monitor:main"
+
+[tool.setuptools.packages.find]
+include = ["lcm_monitor*"]
 
 [tool.setuptools.package-data]
 lcm_monitor = ["*.png"]
