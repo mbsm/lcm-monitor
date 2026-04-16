@@ -6,7 +6,7 @@
 
 ```bash
 sudo apt update
-sudo apt install python3-pyqt5 python3-pyqtgraph python3-numpy liblcm-dev python3-lcm git
+sudo apt install python3-pyqt5 python3-pyqtgraph liblcm-dev python3-lcm git
 ```
 
 ### 2. Clone Repository
@@ -103,7 +103,7 @@ sudo update-desktop-database /usr/share/applications/
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/lcm_monitor.git
+git clone https://github.com/mbsm/lcm-monitor.git
 cd lcm_monitor
 
 # Install in development mode (changes reflected immediately)
@@ -122,7 +122,7 @@ pip3 install lcm-network-monitor
 ### Option 3: Install from GitHub directly
 
 ```bash
-pip3 install git+https://github.com/yourusername/lcm_monitor.git
+pip3 install git+https://github.com/mbsm/lcm-monitor.git
 ```
 
 ## Platform-Specific Notes
@@ -163,7 +163,7 @@ pip install .
 lcm-monitor
 
 # Or use pythonw to avoid console window
-pythonw -m lcm_network_monitor
+pythonw -m lcm_monitor
 ```
 
 **Create Desktop Shortcut:**
@@ -222,7 +222,7 @@ sudo rm /usr/share/applications/lcm-network-monitor.desktop
 
 ### "lcm-monitor: command not found"
 - Ensure `~/.local/bin` (Linux/Mac) or Python Scripts directory (Windows) is in PATH
-- Try running: `python3 -m lcm_network_monitor`
+- Try running: `python3 -m lcm_monitor`
 
 ### "No module named 'lcm'"
 - Install LCM Python bindings: `sudo apt install python3-lcm` or `pip3 install lcm`
@@ -240,7 +240,7 @@ For contributors:
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/lcm_monitor.git
+git clone https://github.com/mbsm/lcm-monitor.git
 cd lcm_monitor
 
 # Install in editable mode with development dependencies
@@ -250,5 +250,5 @@ pip3 install -e .[dev]
 pytest
 
 # Format code
-black lcm_network_monitor.py
+black lcm_monitor/
 ```

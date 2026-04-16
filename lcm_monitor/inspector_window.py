@@ -2,185 +2,138 @@
 Message Inspector Window - Detailed view of LCM message contents.
 """
 
+import logging
+
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QTreeWidget, QLineEdit, 
+    QVBoxLayout, QTreeWidget, QLineEdit,
     QHeaderView, QMenu, QApplication
 )
-from PyQt5.QtCore import QTimer, Qt, QSettings
+from PyQt5.QtCore import Qt
 
-from .utils import fill_qtreeitem_with_lcm
+from .base_window import MonitorChildWindow
+from .utils import fill_qtreeitem_with_lcm, resolve_field_path
+
+log = logging.getLogger(__name__)
 
 
-class MessageInspectorWindow(QWidget):
+class MessageInspectorWindow(MonitorChildWindow):
     """Window for inspecting detailed LCM message contents."""
-    
+
+    SETTINGS_GROUP = "InspectorWindow"
+
     def __init__(self, channel, spy):
-        super().__init__()
+        super().__init__(settings_key=channel)
         self.channel = channel
         self.spy = spy
+        self._last_msg = None
         self.setWindowTitle(f"Inspector - {self.channel}")
         self.setMinimumSize(500, 400)
-        
-        # Keep track of plot windows to prevent garbage collection
+
         self.plot_windows = []
-        
-        # Search bar
+
         self.search_box = QLineEdit()
         self.search_box.setPlaceholderText("Search fields...")
         self.search_box.textChanged.connect(self._filter_tree)
-        
-        # Tree widget with type column
+
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["Field", "Value", "Type"])
         self.tree.setAlternatingRowColors(True)
         self.tree.header().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.tree.header().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.tree.itemDoubleClicked.connect(self._plot_window)
+        self.tree.itemDoubleClicked.connect(self._open_plot)
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self._show_context_menu)
-        
+
         layout = QVBoxLayout()
         layout.addWidget(self.search_box)
         layout.addWidget(self.tree)
         self.setLayout(layout)
-        
-        # Update tree widget every second
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update)
-        self.timer.start(1000)
 
+        self._start_timer(1000, self._refresh_data)
         self.show()
-        
-        # Restore window geometry after show
-        settings = QSettings("LCMMonitor", "InspectorWindow")
-        geometry = settings.value(f"geometry_{channel}", None)
-        if geometry:
-            self.restoreGeometry(geometry)
-    
-    def keyPressEvent(self, event):
-        """Handle Escape key to close window."""
-        if event.key() == Qt.Key_Escape:
-            self.close()
-        else:
-            super().keyPressEvent(event)
-    
-    def closeEvent(self, event):
-        """Save window geometry on close."""
-        settings = QSettings("LCMMonitor", "InspectorWindow")
-        settings.setValue(f"geometry_{self.channel}", self.saveGeometry())
-        event.accept()
-    
+        self._restore_geometry()
+
     def _show_context_menu(self, position):
-        """Show context menu with copy option."""
         item = self.tree.itemAt(position)
         if not item:
             return
-        
+
         menu = QMenu(self)
         copy_action = menu.addAction("Copy Value")
         copy_field_action = menu.addAction("Copy Field Name")
-        
+
         action = menu.exec_(self.tree.viewport().mapToGlobal(position))
-        
+
         if action == copy_action:
-            value = item.text(1)
-            QApplication.clipboard().setText(value)
+            QApplication.clipboard().setText(item.text(1))
         elif action == copy_field_action:
-            field = item.text(0)
-            QApplication.clipboard().setText(field)
-    
+            QApplication.clipboard().setText(item.text(0))
+
     def _filter_tree(self, text):
-        """Filter tree items based on search text."""
-        def filter_item(item, text):
-            match = text.lower() in item.text(0).lower() or text.lower() in item.text(1).lower()
-            item.setHidden(not match and text != "")
-            
-            # Check children
-            child_match = False
-            for i in range(item.childCount()):
-                if filter_item(item.child(i), text):
-                    child_match = True
-            
-            # Show parent if any child matches
-            if child_match:
-                item.setHidden(False)
-            
+        def filter_item(item, search):
+            match = search in item.text(0).lower() or search in item.text(1).lower()
+            child_match = any(
+                filter_item(item.child(i), search)
+                for i in range(item.childCount())
+            )
+            item.setHidden(not (match or child_match) and search != "")
             return match or child_match
-        
+
+        search = text.lower()
         root = self.tree.invisibleRootItem()
         for i in range(root.childCount()):
-            filter_item(root.child(i), text)
+            filter_item(root.child(i), search)
 
-    def _plot_window(self, item, column):
-        """Open plot window for selected numeric field on double-click.
-        
-        Args:
-            item: QTreeWidgetItem that was double-clicked
-            column: Column index that was double-clicked
-        """
-        # Import here to avoid circular dependency
-        from .plot_window import PlotWindow
-        
-        if not item:
-            return
-        
-        # Build full field path from tree hierarchy
-        path_parts = []
+    def _build_field_path(self, item):
+        """Walk up the tree to build a dotted field path from a tree item."""
+        parts = []
         current = item
         while current is not None:
             field_name = current.text(0)
-            if field_name and field_name != self.channel:
-                path_parts.insert(0, field_name)
+            if field_name:
+                parts.append(field_name)
             parent = current.parent()
-            # Stop at invisible root (parent returns the root item for top-level items)
             if parent is None or parent.text(0) == '':
                 break
             current = parent
-        
-        if not path_parts:
+        parts.reverse()
+        return '.'.join(parts) if parts else None
+
+    def _open_plot(self, item, column):
+        """Open plot window for a numeric field on double-click."""
+        from .plot_window import PlotWindow
+
+        if not item:
             return
-        
-        # Get the message
+
+        field_path = self._build_field_path(item)
+        if not field_path:
+            return
+
         with self.spy.lock:
             msg = self.spy.msg.get(self.channel)
-        
+
         if msg is None:
             return
-        
-        # Navigate to the field/value
+
         try:
-            value = msg
-            full_path = []
-            for part in path_parts:
-                full_path.append(part)
-                if part.startswith('[') and part.endswith(']'):
-                    # Array index
-                    index = int(part[1:-1])
-                    value = value[index]
-                else:
-                    # Attribute
-                    value = getattr(value, part)
-            
-            # Check if value is numeric (plottable)
+            value = resolve_field_path(msg, field_path)
             if isinstance(value, (int, float)):
-                field_path = '.'.join(full_path)
-                plot_window = PlotWindow(self.spy, self.channel, field_path)
-                self.plot_windows.append(plot_window)
-            else:
-                print(f"Field '{'.'.join(full_path)}' is not numeric (type: {type(value).__name__})")
-        except (AttributeError, IndexError, ValueError) as e:
-            print(f"Cannot access field: {e}")
-   
-    def update(self):
-        """Update tree with latest message contents."""
-        self.tree.clear()
-        
+                self.plot_windows = [w for w in self.plot_windows if w.isVisible()]
+                self.plot_windows.append(PlotWindow(self.spy, self.channel, field_path))
+        except (AttributeError, IndexError, ValueError):
+            log.debug("Cannot resolve field path: %s", field_path)
+
+    def _refresh_data(self):
         with self.spy.lock:
             msg = self.spy.msg.get(self.channel)
-        
-        if msg is None:
+
+        if msg is None or msg is self._last_msg:
             return
-        
-        root_item = self.tree.invisibleRootItem()
-        fill_qtreeitem_with_lcm(root_item, msg)
+        self._last_msg = msg
+
+        self.tree.setUpdatesEnabled(False)
+        self.tree.clear()
+        fill_qtreeitem_with_lcm(self.tree.invisibleRootItem(), msg)
         self.tree.expandAll()
+        self.tree.setUpdatesEnabled(True)

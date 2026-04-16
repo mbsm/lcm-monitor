@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=45", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.7"
 license = {text = "MIT"}
 authors = [
-    {name = "Your Name", email = "your.email@example.com"}
+    {name = "Matias Bustos", email = "matias.bustos.sm@outlook.com"}
 ]
 keywords = ["lcm", "network", "monitor", "traffic", "visualization", "robotics"]
 classifiers = [
@@ -23,7 +23,6 @@ classifiers = [
 ]
 
 dependencies = [
-    "numpy>=1.20.0",
     "PyQt5>=5.15.0",
     "pyqtgraph>=0.12.0",
 ]
@@ -36,22 +35,13 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/lcm_monitor"
-Documentation = "https://github.com/yourusername/lcm_monitor#readme"
-Repository = "https://github.com/yourusername/lcm_monitor"
-"Bug Tracker" = "https://github.com/yourusername/lcm_monitor/issues"
+Homepage = "https://github.com/mbsm/lcm-monitor"
+Repository = "https://github.com/mbsm/lcm-monitor"
+"Bug Tracker" = "https://github.com/mbsm/lcm-monitor/issues"
 
 [project.scripts]
-lcm-monitor = "lcm_network_monitor:main"
-lcm-test = "test:main"
-
-[tool.setuptools]
-py-modules = ["lcm_network_monitor", "test"]
+lcm-monitor = "lcm_monitor.lcm_network_monitor:main"
 
 [tool.black]
 line-length = 100
 target-version = ['py37', 'py38', 'py39', 'py310']
-
-[tool.flake8]
-max-line-length = 100
-extend-ignore = ["E203", "W503"]

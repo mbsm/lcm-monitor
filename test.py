@@ -10,14 +10,6 @@ import sys
 import random
 import time
 
-# Example: If your LCM types are in a package, import them here
-# Uncomment and modify the following lines based on your setup:
-# from your_lcm_package.gps_t import gps_t
-# from your_lcm_package.state_t import state_t
-
-# For development with local types, you can add to path:
-# import os
-# sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'lcm_types'))
 
 try:
     from gps_t import gps_t
@@ -28,53 +20,16 @@ except ImportError:
     sys.exit(1)
 
 
-
-class Timer():
-    def __init__(self, period):
-        self.period = period
-        self.next = time.time()+ self.period
-    
-    def timeout(self):
-        if(time.time()> self.next):
-            self.next += self.period
-            return True
-
-        return False 
-
-class Rate():
+class Rate:
     def __init__(self, hz):
-        self.period = 1/hz
-        self.next_time = time.time()+self.period
-    
+        self.period = 1 / hz
+        self.next_time = time.time() + self.period
+
     def sleep(self):
         remaining = self.next_time - time.time()
-        if(remaining>0):
+        if remaining > 0:
             time.sleep(remaining)
         self.next_time += self.period
-
-
-
-lc=lcm.LCM()
-dh =0.01
-rate = Rate(100)
-while True:
-
-    gps = gps_t()
-
-    gps.fix = 4
-    gps.latitude = 123456
-    gps.longitude = 456786
-    gps.altitude = 0
-
-    gps.heading = 147
-    gps.ground_speed = 2.25 + random.random()
-    
-    state = state_t()
-
-    
-    lc.publish("gps", gps.encode())
-    lc.publish("state", state.encode())
-    rate.sleep()
 
 
 def main():
@@ -82,10 +37,10 @@ def main():
     print("Starting LCM test traffic generator...")
     print("Publishing on channels: gps, state")
     print("Press Ctrl+C to stop")
-    
+
     lc = lcm.LCM()
     rate = Rate(100)
-    
+
     try:
         while True:
             gps = gps_t()
@@ -95,9 +50,9 @@ def main():
             gps.altitude = 0
             gps.heading = 147
             gps.ground_speed = 2.25 + random.random()
-            
+
             state = state_t()
-            
+
             lc.publish("gps", gps.encode())
             lc.publish("state", state.encode())
             rate.sleep()
@@ -107,4 +62,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    

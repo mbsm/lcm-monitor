@@ -39,6 +39,7 @@ lcm_monitor/
 │   ├── lcm_spy.py            # LCM message spy & type detection
 │   ├── inspector_window.py   # Message inspector UI
 │   ├── plot_window.py        # Real-time plotting
+│   ├── base_window.py        # Shared child window base class
 │   ├── channel_stats.py      # Statistics tracking
 │   ├── styles.py             # UI theme
 │   └── utils.py              # Utility functions
@@ -55,7 +56,7 @@ lcm_monitor/
 
 Install system dependencies:
 ```bash
-sudo apt install python3-pyqt5 python3-pyqtgraph python3-numpy liblcm-dev python3-lcm git
+sudo apt install python3-pyqt5 python3-pyqtgraph liblcm-dev python3-lcm git
 ```
 
 Clone and install:
@@ -95,7 +96,7 @@ Or launch from applications menu: Search for "LCM Network Monitor"
 
 Install dependencies according to the [LCM documentation](https://lcm-proj.github.io/), then:
 ```bash
-pip install PyQt5 pyqtgraph numpy
+pip install PyQt5 pyqtgraph
 python3 -m lcm_monitor
 ```
 
@@ -138,7 +139,7 @@ python3 test.py
 
 ### Main Window
 - Toolbar: Import Types, Clear Statistics, Properties
-- Click column headers to sort
+- Double-click column headers to sort
 - Status bar shows connection status, channel count, bandwidth
 
 ### Inspector Window  
@@ -161,7 +162,9 @@ python3 test.py
 ## Technical Details
 
 - Thread-safe design with separate LCM handling thread
-- Dynamic type discovery with retry on new imports
+- Dynamic type discovery with retry on failed detection (up to 5 attempts per channel)
+- Generation-based change detection skips expensive UI rebuilds during idle periods
+- Type loading performs I/O outside the lock to avoid blocking the message handler
 - 1Hz GUI polling (configurable), high-frequency LCM in background thread
 - Window geometry persistence via QSettings
 
