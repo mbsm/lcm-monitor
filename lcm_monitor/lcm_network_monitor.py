@@ -272,8 +272,51 @@ class MainWindow(QMainWindow):
             self.lcm.handle_timeout(100)
 
 
+def _ensure_desktop_entry():
+    """On Linux, create .desktop file and install icon on first run."""
+    if not sys.platform.startswith('linux'):
+        return
+
+    from pathlib import Path
+    import shutil
+
+    apps_dir = Path.home() / '.local' / 'share' / 'applications'
+    desktop_file = apps_dir / 'lcm-network-monitor.desktop'
+
+    if desktop_file.exists():
+        return
+
+    icons_dir = Path.home() / '.local' / 'share' / 'icons'
+    icon_src = Path(__file__).parent / 'lcm.png'
+    icon_dest = icons_dir / 'lcm-network-monitor.png'
+
+    try:
+        icons_dir.mkdir(parents=True, exist_ok=True)
+        if icon_src.exists() and not icon_dest.exists():
+            shutil.copy2(icon_src, icon_dest)
+
+        apps_dir.mkdir(parents=True, exist_ok=True)
+        desktop_file.write_text(f"""\
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=LCM Network Monitor
+Comment=Monitor and visualize LCM network traffic
+Exec=python3 -m lcm_monitor
+Icon={icon_dest}
+Terminal=false
+Categories=Development;Network;Utility;
+Keywords=LCM;Network;Monitor;Traffic;
+""")
+        desktop_file.chmod(0o755)
+    except OSError:
+        pass
+
+
 def main(app=None):
     """Application entry point."""
+    _ensure_desktop_entry()
+
     udpm_url = get_cmd_option(sys.argv, "-u=", "udpm://239.255.76.67:7667?ttl=1")
     types_path = get_cmd_option(sys.argv, "-p=", None)
 

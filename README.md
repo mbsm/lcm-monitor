@@ -63,27 +63,10 @@ Clone and install:
 ```bash
 git clone https://github.com/mbsm/lcm-monitor.git
 cd lcm-monitor
-sudo pip3 install -e . --break-system-packages
+pip3 install --user .
 ```
 
-Install desktop launcher:
-```bash
-sudo cp lcm.png /usr/share/pixmaps/lcm-network-monitor.png
-sudo tee /usr/share/applications/lcm-network-monitor.desktop > /dev/null << 'EOF'
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=LCM Network Monitor
-Comment=Monitor and visualize LCM network traffic
-Exec=/usr/bin/python3 -m lcm_monitor
-Icon=/usr/share/pixmaps/lcm-network-monitor.png
-Terminal=false
-Categories=Development;Network;Utility;
-Keywords=LCM;Network;Monitor;Traffic;
-StartupNotify=true
-EOF
-sudo update-desktop-database /usr/share/applications/
-```
+A desktop launcher is created automatically on the first run.
 
 Run from terminal:
 ```bash

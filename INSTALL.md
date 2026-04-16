@@ -42,27 +42,8 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-### Desktop launcher (optional)
-
-```bash
-sudo cp lcm.png /usr/share/pixmaps/lcm-network-monitor.png
-
-sudo tee /usr/share/applications/lcm-network-monitor.desktop > /dev/null << 'EOF'
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=LCM Network Monitor
-Comment=Monitor and visualize LCM network traffic
-Exec=python3 -m lcm_monitor
-Icon=/usr/share/pixmaps/lcm-network-monitor.png
-Terminal=false
-Categories=Development;Network;Utility;
-Keywords=LCM;Network;Monitor;Traffic;
-StartupNotify=true
-EOF
-
-sudo update-desktop-database /usr/share/applications/
-```
+A desktop launcher is created automatically on the first run at
+`~/.local/share/applications/lcm-network-monitor.desktop`.
 
 ## macOS
 
@@ -115,11 +96,10 @@ lcm-monitor -p=/path/to/lcm_types
 pip3 uninstall lcm-network-monitor
 ```
 
-On Linux, remove the desktop file if you created one:
+On Linux, remove the auto-created desktop entry:
 ```bash
-sudo rm /usr/share/applications/lcm-network-monitor.desktop
-sudo rm /usr/share/pixmaps/lcm-network-monitor.png
-sudo update-desktop-database /usr/share/applications/
+rm ~/.local/share/applications/lcm-network-monitor.desktop
+rm ~/.local/share/icons/lcm-network-monitor.png
 ```
 
 ## Troubleshooting

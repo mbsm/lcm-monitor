@@ -42,6 +42,9 @@ Repository = "https://github.com/mbsm/lcm-monitor"
 [project.scripts]
 lcm-monitor = "lcm_monitor.lcm_network_monitor:main"
 
+[tool.setuptools.package-data]
+lcm_monitor = ["*.png"]
+
 [tool.black]
 line-length = 100
 target-version = ['py37', 'py38', 'py39', 'py310']
