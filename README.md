@@ -1,161 +1,128 @@
 # LCM Network Monitor
 
-A Python-based network monitor for [LCM (Lightweight Communications and Marshalling)](https://lcm-proj.github.io/) traffic, based on the original lcm-spy tool. Created for systems where Java dependencies are problematic or unavailable.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.7+](https://img.shields.io/badge/Python-3.7%2B-blue.svg)](https://python.org)
+[![PyQt5](https://img.shields.io/badge/GUI-PyQt5-green.svg)](https://riverbankcomputing.com/software/pyqt/)
 
-## Description
+A lightweight, real-time network traffic monitor for [LCM (Lightweight Communications and Marshalling)](https://lcm-proj.github.io/). Built as a modern Python alternative to the Java-based `lcm-spy` tool.
 
-This is a Python implementation of lcm-spy functionality using PyQt5 and pyqtgraph. It monitors LCM network traffic and provides:
-
-- Real-time traffic overview with channel statistics (message counts, frequencies, jitter, bandwidth)
-- Dynamic LCM type discovery and loading from Python modules
-- Message inspector with recursive tree view of message fields
-- Live plotting of numeric message fields
-- Dark theme UI with sortable tables, search, and keyboard shortcuts
-
-## Screenshots
-
-### Main Window
 ![Main Window](screenshots/main_window.png)
 
-Main window showing active LCM channels with statistics. Double-click column headers to sort.
+## Features
 
-### Message Inspector
-![Message Inspector](screenshots/inspector.png)
+- **Real-time traffic overview** — message counts, frequency (Hz), jitter, and auto-scaled bandwidth per channel
+- **Automatic type detection** — discovers and loads LCM type definitions from Python packages with retry on failure
+- **Message inspector** — recursive tree view of decoded message fields with search and copy support
+- **Live plotting** — double-click any numeric field to plot its value over time
+- **Dark theme** — professional UI with sortable tables, keyboard shortcuts, and persistent window geometry
 
-Inspector window with tree view of message fields. Double-click numeric fields to plot.
-
-## Background
-
-Python port of the Java-based lcm-spy utility. Developed when Java package updates broke the original tool. Provides equivalent monitoring functionality using pure Python dependencies.
-
-## Project Structure
-
-```
-lcm_monitor/
-├── lcm_monitor/              # Main package
-│   ├── __init__.py           # Package initialization  
-│   ├── __main__.py           # Module entry point
-│   ├── lcm_network_monitor.py # Main window
-│   ├── lcm_spy.py            # LCM message spy & type detection
-│   ├── inspector_window.py   # Message inspector UI
-│   ├── plot_window.py        # Real-time plotting
-│   ├── base_window.py        # Shared child window base class
-│   ├── channel_stats.py      # Statistics tracking
-│   ├── styles.py             # UI theme
-│   └── utils.py              # Utility functions
-├── run.py                    # Standalone entry point
-├── test.py                   # Traffic simulator
-├── pyproject.toml            # Package configuration
-├── README.md                 # This file
-└── LICENSE                   # MIT License
-```
-
-## Installation
+## Quick Start
 
 ### Ubuntu/Debian
 
-Install system dependencies:
 ```bash
-sudo apt install python3-pyqt5 python3-pyqtgraph liblcm-dev python3-lcm git
-```
-
-Clone and install:
-```bash
+sudo apt install python3-pyqt5 python3-pyqtgraph liblcm-dev python3-lcm
 git clone https://github.com/mbsm/lcm-monitor.git
 cd lcm-monitor
-pip3 install --user .
+pip3 install --user --break-system-packages .
 ```
 
-A desktop launcher is created automatically on the first run.
+### Other platforms
 
-Run from terminal:
-```bash
-python3 -m lcm_monitor
-```
+Install [LCM](https://lcm-proj.github.io/) for your system, then:
 
-Or launch from applications menu: Search for "LCM Network Monitor"
-
-### Other Platforms
-
-Install dependencies according to the [LCM documentation](https://lcm-proj.github.io/), then:
 ```bash
 pip install PyQt5 pyqtgraph
-python3 -m lcm_monitor
+pip install git+https://github.com/mbsm/lcm-monitor.git
 ```
+
+### Run
+
+```bash
+lcm-monitor                   # installed command
+python3 -m lcm_monitor        # or as a module
+```
+
+On Linux, a desktop launcher is created automatically on first run.
 
 ## Usage
 
-### Running the Monitor
+### Command line options
 
-As a Python module:
 ```bash
-python3 -m lcm_monitor
+lcm-monitor                                           # default multicast
+lcm-monitor -u="udpm://239.255.76.67:7667?ttl=1"      # custom LCM URL
+lcm-monitor -p=/path/to/lcmtypes/python               # load types on startup
 ```
 
-Or using run.py:
-```bash
-python3 run.py
+### Main window
+
+| Action | How |
+|--------|-----|
+| Sort by column | Double-click column header |
+| Open inspector | Double-click a channel row |
+| Import types | `Ctrl+I` or toolbar button |
+| Clear statistics | `Ctrl+K` or toolbar button |
+| Configure settings | Toolbar Properties button |
+
+### Inspector window
+
+| Action | How |
+|--------|-----|
+| Search fields | Type in the search bar |
+| Copy value | Right-click a field |
+| Plot a field | Double-click a numeric value |
+| Close | `Escape` |
+
+### Plot window
+
+| Action | How |
+|--------|-----|
+| Pause / resume | Click the Pause button |
+| Change window size | Adjust the Samples spinner (10 -- 1000) |
+| Close | `Escape` |
+
+## Screenshots
+
+### Message Inspector
+
+![Message Inspector](screenshots/inspector.png)
+
+## Architecture
+
+```
+lcm_monitor/
+├── lcm_network_monitor.py   # Main window and application entry point
+├── lcm_spy.py               # Message handling, type detection, statistics
+├── inspector_window.py       # Message inspector tree view
+├── plot_window.py            # Real-time field plotting
+├── base_window.py            # Shared child-window base class
+├── channel_stats.py          # Per-channel statistics (Hz, bandwidth, jitter)
+├── utils.py                  # Field path resolution, formatting, tree builder
+└── styles.py                 # Dark theme stylesheet
 ```
 
-### Command Line Options
+**Key design decisions:**
 
-Specify LCM URL:
+- **Thread-safe** — LCM messages are handled on a background thread; the GUI polls at 1 Hz (configurable) under a shared lock
+- **Generation-based change detection** — the table and inspector skip rebuilds when no new messages have arrived
+- **Non-blocking type loading** — filesystem scanning and module imports happen outside the lock so the message handler is never stalled
+- **Automatic type detection with retry** — each channel gets up to 5 decode attempts before being marked as undecodable, handling transient failures on startup
+- **Zero heavyweight dependencies** — statistics are computed with pure Python (no NumPy required)
+
+## Development
+
 ```bash
-python3 -m lcm_monitor -u="udpm://239.255.76.67:7667?ttl=1"
-```
+git clone https://github.com/mbsm/lcm-monitor.git
+cd lcm-monitor
+pip3 install -e .[dev]
 
-Load LCM types:
-```bash
-python3 -m lcm_monitor -p=/path/to/lcmtypes/python
-```
-
-Or use **File > Import LCM Types** from the menu.
-
-### Testing
-
-Generate sample traffic:
-```bash
+# Generate test traffic (requires LCM types)
 python3 test.py
 ```
 
-## Usage Guide
-
-### Main Window
-- Toolbar: Import Types, Clear Statistics, Properties
-- Double-click column headers to sort
-- Status bar shows connection status, channel count, bandwidth
-
-### Inspector Window  
-- Search bar filters fields
-- Right-click to copy values or field names
-- Double-click numeric fields to plot
-- Press Escape to close
-
-### Plot Window
-- Pause/Resume button freezes plot
-- Adjust sample size (10-1000)
-- Press Escape to close
-
-### Keyboard Shortcuts
-- `Ctrl+I` - Import LCM Types
-- `Ctrl+K` - Clear Statistics  
-- `Ctrl+Q` - Exit
-- `Escape` - Close windows
-
-## Technical Details
-
-- Thread-safe design with separate LCM handling thread
-- Dynamic type discovery with retry on failed detection (up to 5 attempts per channel)
-- Generation-based change detection skips expensive UI rebuilds during idle periods
-- Type loading performs I/O outside the lock to avoid blocking the message handler
-- 1Hz GUI polling (configurable), high-frequency LCM in background thread
-- Window geometry persistence via QSettings
-
-## Author
-
-Matias Bustos SM
-Feb 2026
+See [INSTALL.md](INSTALL.md) for detailed platform-specific instructions.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file.
+MIT License -- see [LICENSE](LICENSE) for details.
