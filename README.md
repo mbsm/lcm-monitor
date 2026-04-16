@@ -118,7 +118,7 @@ cd lcm-monitor
 pip3 install -e .[dev]
 
 # Generate test traffic (requires LCM types)
-python3 test.py
+python3 tools/traffic_gen.py
 ```
 
 See [INSTALL.md](INSTALL.md) for detailed platform-specific instructions.

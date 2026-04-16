@@ -1,36 +1,19 @@
-# GitHub configuration - prevent committing AI instructions
-.github/
-
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
+*.egg-info/
+*.egg
+.installed.cfg
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
-*.egg-info/
-.installed.cfg
-*.egg
-lib/
-lib64/
-parts/
 sdist/
-var/
 wheels/
-*.egg-info/
-.installed.cfg
-*.egg
 
 # Virtual environments
 venv/
-ENV/
-env/
-.venv
+.venv/
 
 # IDE
 .vscode/
@@ -43,6 +26,5 @@ env/
 .DS_Store
 Thumbs.db
 
-# LCM Monitor specific
+# Project
 *.log
-*.desktop
