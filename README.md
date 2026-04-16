@@ -45,7 +45,7 @@ lcm_monitor/
 │   └── utils.py              # Utility functions
 ├── run.py                    # Standalone entry point
 ├── test.py                   # Traffic simulator
-├── setup.py                  # Installation script
+├── pyproject.toml            # Package configuration
 ├── README.md                 # This file
 └── LICENSE                   # MIT License
 ```
