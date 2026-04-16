@@ -123,6 +123,10 @@ python3 test.py
 
 See [INSTALL.md](INSTALL.md) for detailed platform-specific instructions.
 
+## Author
+
+Matias Bustos SM
+
 ## License
 
 MIT License -- see [LICENSE](LICENSE) for details.
