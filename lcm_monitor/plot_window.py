@@ -9,9 +9,11 @@ from collections import deque
 os.environ.setdefault("PYQTGRAPH_QT_LIB", "PyQt5")
 
 import pyqtgraph as pg
+from PyQt5.QtGui import QColor
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSpinBox
 
 from .base_window import MonitorChildWindow
+from .theme import DARK
 from .utils import resolve_field_path
 
 log = logging.getLogger(__name__)
@@ -50,18 +52,25 @@ class PlotWindow(MonitorChildWindow):
         control_layout.addStretch()
 
         self.current_value_label = QLabel("Current: --")
-        self.current_value_label.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self.current_value_label.setStyleSheet(
+            "font-weight: 600; font-size: 13px; background: transparent;"
+        )
         control_layout.addWidget(self.current_value_label)
 
-        # Plot
-        self.plot_widget = pg.PlotWidget()
-        self.plot_widget.setTitle(f"{self.channel}.{self.field_name}")
-        self.plot_widget.showGrid(x=True, y=True)
-        self.plot_widget.setLabel('left', 'Value')
-        self.plot_widget.setLabel('bottom', 'Sample')
+        # Plot — colors match the app palette
+        self.plot_widget = pg.PlotWidget(background=DARK.surface)
+        self.plot_widget.setTitle(f"{self.channel}.{self.field_name}", color=DARK.text)
+        axis_color = QColor(DARK.text_muted)
+        for axis in ("left", "bottom"):
+            ax = self.plot_widget.getAxis(axis)
+            ax.setPen(axis_color)
+            ax.setTextPen(axis_color)
+        self.plot_widget.showGrid(x=True, y=True, alpha=0.2)
+        self.plot_widget.setLabel("left", "Value")
+        self.plot_widget.setLabel("bottom", "Sample")
 
         self.data = deque(maxlen=self.MAX_SAMPLES)
-        self.line = self.plot_widget.plot(pen='y')
+        self.line = self.plot_widget.plot(pen=pg.mkPen(DARK.accent, width=2))
 
         layout = QVBoxLayout()
         layout.addLayout(control_layout)

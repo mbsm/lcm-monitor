@@ -11,16 +11,28 @@ import lcm
 import pyqtgraph as pg
 from PyQt5.QtWidgets import (
     QMainWindow, QVBoxLayout, QLabel, QLineEdit,
-    QAction, QFileDialog, QDialog, QApplication, QStackedWidget, QStyle,
-    QSpinBox, QFormLayout, QDialogButtonBox,
+    QAction, QFileDialog, QDialog, QApplication, QStackedWidget,
+    QSpinBox, QFormLayout, QDialogButtonBox, QMenu,
 )
-from PyQt5.QtCore import QTimer, Qt, QSettings, QSize
+from PyQt5.QtCore import QTimer, Qt, QSettings
 from PyQt5.QtGui import QColor, QKeySequence
 
-from lcm_monitor.styles import APP_STYLESHEET
+from lcm_monitor.theme import DARK, app_stylesheet, qpalette
 from lcm_monitor.utils import get_cmd_option
-from lcm_monitor.lcm_spy import LCMMessageSpy, DECODABLE_COL, sort_traffic_data
+from lcm_monitor.lcm_spy import COLUMNS, LCMMessageSpy, DECODABLE_COL, sort_traffic_data
 from lcm_monitor.inspector_window import MessageInspectorWindow
+
+
+STATUS_ACTIVE = "#2ecc71"
+STATUS_IDLE = "#8b919d"
+DECODABLE_OK = "#2ecc71"
+DECODABLE_FAIL = "#e74c3c"
+
+# Identifier-style columns are centered; everything else (counts, rates,
+# bandwidth) is right-aligned so digits line up vertically.
+_CENTERED_COLUMNS = frozenset(
+    COLUMNS.index(n) for n in ("Channel", "Type", "Decodable")
+)
 
 
 class MainWindow(QMainWindow):
@@ -64,20 +76,24 @@ class MainWindow(QMainWindow):
 
     def _setup_ui(self):
         """Initialize UI components."""
-        self._setup_toolbar()
+        self._setup_actions()
+        self._setup_menu_bar()
 
         self.traffic_table = pg.TableWidget()
         self.traffic_table.verticalHeader().setVisible(False)
         self.traffic_table.setAlternatingRowColors(True)
+        self.traffic_table.setShowGrid(False)
         self.traffic_table.horizontalHeader().setStretchLastSection(True)
         self.traffic_table.cellDoubleClicked.connect(self._open_inspector_window)
         self.traffic_table.horizontalHeader().sectionDoubleClicked.connect(self._sort_by_column)
+        self.traffic_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.traffic_table.customContextMenuRequested.connect(self._show_table_context_menu)
         self.current_sort_column = None
         self.sort_ascending = True
 
         self.empty_label = QLabel("Waiting for LCM messages...")
+        self.empty_label.setObjectName("EmptyState")
         self.empty_label.setAlignment(Qt.AlignCenter)
-        self.empty_label.setStyleSheet("color: #888888; font-size: 16px; padding: 50px;")
 
         self.stack = QStackedWidget()
         self.stack.addWidget(self.traffic_table)
@@ -89,7 +105,9 @@ class MainWindow(QMainWindow):
         status_bar.showMessage('Ready', 5000)
 
         self.connection_indicator = QLabel("\u25cf")
-        self.connection_indicator.setStyleSheet("color: #888888; font-size: 16px;")
+        self.connection_indicator.setStyleSheet(
+            f"color: {STATUS_IDLE}; font-size: 14px; background: transparent;"
+        )
         self.connection_indicator.setToolTip("Connection status")
         status_bar.addPermanentWidget(self.connection_indicator)
 
@@ -99,35 +117,82 @@ class MainWindow(QMainWindow):
         self.traffic_label = QLabel("Total: 0.00 KB/s")
         status_bar.addPermanentWidget(self.traffic_label)
 
-    def _setup_toolbar(self):
-        """Setup application toolbar."""
-        toolbar = self.addToolBar('Main')
-        toolbar.setMovable(False)
-        toolbar.setIconSize(QSize(24, 24))
+    def _setup_actions(self):
+        """Build QActions shared by the menu bar and toolbar."""
+        self.import_action = QAction("&Import Types...", self)
+        self.import_action.setShortcut(QKeySequence("Ctrl+I"))
+        self.import_action.setToolTip("Import LCM type definitions (Ctrl+I)")
+        self.import_action.triggered.connect(self._import_types)
 
-        import_action = QAction("Import Types", self)
-        import_action.setIcon(self.style().standardIcon(QStyle.SP_DirOpenIcon))
-        import_action.setShortcut(QKeySequence("Ctrl+I"))
-        import_action.setToolTip("Import LCM type definitions (Ctrl+I)")
-        import_action.triggered.connect(self._import_types)
-        toolbar.addAction(import_action)
+        self.clear_action = QAction("&Clear Statistics", self)
+        self.clear_action.setShortcut(QKeySequence("Ctrl+K"))
+        self.clear_action.setToolTip("Clear all channel statistics (Ctrl+K)")
+        self.clear_action.triggered.connect(self._clear_statistics)
 
-        toolbar.addSeparator()
+        self.properties_action = QAction("&Properties...", self)
+        self.properties_action.setShortcut(QKeySequence("Ctrl+,"))
+        self.properties_action.setToolTip("Configure monitor settings (Ctrl+,)")
+        self.properties_action.triggered.connect(self._show_properties_dialog)
 
-        clear_action = QAction("Clear", self)
-        clear_action.setIcon(self.style().standardIcon(QStyle.SP_TrashIcon))
-        clear_action.setShortcut(QKeySequence("Ctrl+K"))
-        clear_action.setToolTip("Clear all statistics (Ctrl+K)")
-        clear_action.triggered.connect(self._clear_statistics)
-        toolbar.addAction(clear_action)
+        self.quit_action = QAction("&Quit", self)
+        self.quit_action.setShortcut(QKeySequence.Quit)
+        self.quit_action.triggered.connect(self.close)
 
-        toolbar.addSeparator()
+        self.about_action = QAction("&About", self)
+        self.about_action.triggered.connect(self._show_about_dialog)
 
-        props_action = QAction("Properties", self)
-        props_action.setIcon(self.style().standardIcon(QStyle.SP_FileDialogDetailedView))
-        props_action.setToolTip("Configure monitor settings")
-        props_action.triggered.connect(self._show_properties_dialog)
-        toolbar.addAction(props_action)
+    def _setup_menu_bar(self):
+        """Build the application menu bar."""
+        menu_bar = self.menuBar()
+
+        file_menu = menu_bar.addMenu("&File")
+        file_menu.addAction(self.import_action)
+        file_menu.addAction(self.clear_action)
+        file_menu.addSeparator()
+        file_menu.addAction(self.quit_action)
+
+        edit_menu = menu_bar.addMenu("&Edit")
+        edit_menu.addAction(self.properties_action)
+
+        help_menu = menu_bar.addMenu("&Help")
+        help_menu.addAction(self.about_action)
+
+    def _show_table_context_menu(self, position):
+        """Right-click menu on the traffic table."""
+        menu = QMenu(self.traffic_table)
+        item = self.traffic_table.itemAt(position)
+        if item is not None:
+            row = item.row()
+            channel_item = self.traffic_table.item(row, 0)
+            channel = channel_item.text() if channel_item else None
+            if channel:
+                inspect_action = menu.addAction(f"Inspect '{channel}'")
+                inspect_action.triggered.connect(
+                    lambda _checked=False, r=row: self._open_inspector_window(r, 0)
+                )
+                menu.addSeparator()
+        menu.addAction(self.clear_action)
+        menu.exec_(self.traffic_table.viewport().mapToGlobal(position))
+
+    def _show_about_dialog(self):
+        """Show the About dialog."""
+        from . import __version__
+        text = (
+            f"<b>LCM Network Monitor</b> v{__version__}<br><br>"
+            "Real-time monitoring and visualization of LCM network traffic.<br><br>"
+            f"Listening on:<br><code>{self.udpm_url}</code>"
+        )
+        dialog = QDialog(self)
+        dialog.setWindowTitle("About LCM Network Monitor")
+        label = QLabel(text)
+        label.setTextFormat(Qt.RichText)
+        label.setWordWrap(True)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok)
+        buttons.accepted.connect(dialog.accept)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(label)
+        layout.addWidget(buttons)
+        dialog.exec_()
 
     def _sort_by_column(self, column):
         """Sort table by double-clicked column header."""
@@ -180,20 +245,39 @@ class MainWindow(QMainWindow):
         self.inspector_windows[channel] = window
 
     def _apply_table_formatting(self):
-        """Apply color coding to the Decodable column."""
-        for row in range(self.traffic_table.rowCount()):
-            item = self.traffic_table.item(row, DECODABLE_COL)
-            if item:
-                if item.text() == "True":
-                    item.setForeground(QColor("#4CAF50"))
-                elif item.text() == "False":
-                    item.setForeground(QColor("#F44336"))
+        """Set per-column alignment and color-code the Decodable column."""
+        col_count = self.traffic_table.columnCount()
+        row_count = self.traffic_table.rowCount()
+
+        for col in range(col_count):
+            align = (
+                Qt.AlignCenter if col in _CENTERED_COLUMNS
+                else Qt.AlignRight | Qt.AlignVCenter
+            )
+            header_item = self.traffic_table.horizontalHeaderItem(col)
+            if header_item is not None:
+                header_item.setTextAlignment(align)
+
+        for row in range(row_count):
+            for col in range(col_count):
+                item = self.traffic_table.item(row, col)
+                if item is None:
+                    continue
+                item.setTextAlignment(
+                    Qt.AlignCenter if col in _CENTERED_COLUMNS
+                    else Qt.AlignRight | Qt.AlignVCenter
+                )
+                if col == DECODABLE_COL:
+                    if item.text() == "True":
+                        item.setForeground(QColor(DECODABLE_OK))
+                    elif item.text() == "False":
+                        item.setForeground(QColor(DECODABLE_FAIL))
 
     def _update_display(self):
         """Update main window display with latest statistics."""
         data = self.spy.get_display_data()
 
-        # Always update status bar (cheap)
+        # Always update status bar (cheap) — always shows the global view.
         self.traffic_label.setText(f"Total: {data.total_bw:.2f} {data.bw_unit}")
         self.channel_count_label.setText(
             f"{data.channel_count} channel{'s' if data.channel_count != 1 else ''}"
@@ -202,10 +286,14 @@ class MainWindow(QMainWindow):
         if data.active != self._connection_active:
             self._connection_active = data.active
             if data.active:
-                self.connection_indicator.setStyleSheet("color: #4CAF50; font-size: 16px;")
+                self.connection_indicator.setStyleSheet(
+                    f"color: {STATUS_ACTIVE}; font-size: 14px; background: transparent;"
+                )
                 self.connection_indicator.setToolTip("Receiving messages")
             else:
-                self.connection_indicator.setStyleSheet("color: #888888; font-size: 16px;")
+                self.connection_indicator.setStyleSheet(
+                    f"color: {STATUS_IDLE}; font-size: 14px; background: transparent;"
+                )
                 self.connection_indicator.setToolTip("Idle")
 
         # Skip expensive table rebuild if data hasn't changed
@@ -322,9 +410,10 @@ def main(app=None):
 
     if app is None:
         app = QApplication(sys.argv)
-        app.setStyleSheet(APP_STYLESHEET)
         app.setOrganizationName("LCMMonitor")
         app.setApplicationName("LCM Network Monitor")
+        app.setPalette(qpalette(DARK))
+        app.setStyleSheet(app_stylesheet(DARK))
 
     window = MainWindow(udpm_url, types_path=types_path)
     sys.exit(app.exec())
