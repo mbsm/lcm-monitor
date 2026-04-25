@@ -19,9 +19,9 @@ def format_bandwidth(kbps):
     Returns:
         Tuple of (value, unit_string)
     """
-    if kbps > 1024 * 1024:
+    if kbps >= 1024 * 1024:
         return kbps / (1024 * 1024), "GB/s"
-    elif kbps > 1024:
+    if kbps >= 1024:
         return kbps / 1024, "MB/s"
     return kbps, "KB/s"
 

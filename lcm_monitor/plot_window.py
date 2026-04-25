@@ -3,7 +3,10 @@ Plot Window - Real-time visualization of LCM message fields.
 """
 
 import logging
+import os
 from collections import deque
+
+os.environ.setdefault("PYQTGRAPH_QT_LIB", "PyQt5")
 
 import pyqtgraph as pg
 from PyQt5.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QSpinBox
@@ -66,8 +69,8 @@ class PlotWindow(MonitorChildWindow):
         self.setLayout(layout)
 
         self._start_timer(1000, self._refresh_data)
-        self.show()
         self._restore_geometry()
+        self.show()
 
     def _toggle_pause(self):
         self.paused = not self.paused

@@ -50,8 +50,8 @@ class MessageInspectorWindow(MonitorChildWindow):
         self.setLayout(layout)
 
         self._start_timer(1000, self._refresh_data)
-        self.show()
         self._restore_geometry()
+        self.show()
 
     def _show_context_menu(self, position):
         item = self.tree.itemAt(position)

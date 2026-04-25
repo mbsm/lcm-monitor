@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
 """LCM Network Monitor - Real-time monitoring and visualization of LCM network traffic."""
 
+import os
 import sys
 import threading
+
+os.environ.setdefault("PYQTGRAPH_QT_LIB", "PyQt5")
 
 import lcm
 import pyqtgraph as pg
 from PyQt5.QtWidgets import (
-    QMainWindow, QVBoxLayout, QLabel, QLineEdit, QPushButton,
-    QAction, QFileDialog, QDialog, QApplication, qApp, QStackedWidget, QStyle
+    QMainWindow, QVBoxLayout, QLabel, QLineEdit,
+    QAction, QFileDialog, QDialog, QApplication, QStackedWidget, QStyle,
+    QSpinBox, QFormLayout, QDialogButtonBox,
 )
 from PyQt5.QtCore import QTimer, Qt, QSettings, QSize
 from PyQt5.QtGui import QColor, QKeySequence
@@ -52,12 +56,11 @@ class MainWindow(QMainWindow):
         self.update_timer.timeout.connect(self._update_display)
         self.update_timer.start(self.update_rate_ms)
 
-        self.show()
-
         settings = QSettings("LCMMonitor", "MainWindow")
         geometry = settings.value("geometry", None)
         if geometry:
             self.restoreGeometry(geometry)
+        self.show()
 
     def _setup_ui(self):
         """Initialize UI components."""
@@ -66,6 +69,7 @@ class MainWindow(QMainWindow):
         self.traffic_table = pg.TableWidget()
         self.traffic_table.verticalHeader().setVisible(False)
         self.traffic_table.setAlternatingRowColors(True)
+        self.traffic_table.horizontalHeader().setStretchLastSection(True)
         self.traffic_table.cellDoubleClicked.connect(self._open_inspector_window)
         self.traffic_table.horizontalHeader().sectionDoubleClicked.connect(self._sort_by_column)
         self.current_sort_column = None
@@ -151,7 +155,6 @@ class MainWindow(QMainWindow):
         settings.setValue("geometry", self.saveGeometry())
         self.running = False
         event.accept()
-        qApp.quit()
 
     def _clear_statistics(self):
         """Clear all accumulated channel statistics."""
@@ -218,7 +221,6 @@ class MainWindow(QMainWindow):
             self.stack.setCurrentWidget(self.traffic_table)
             self.traffic_table.setData(rows)
             self._apply_table_formatting()
-            self.traffic_table.horizontalHeader().setStretchLastSection(True)
         else:
             self.stack.setCurrentWidget(self.empty_label)
 
@@ -226,45 +228,43 @@ class MainWindow(QMainWindow):
         """Show properties configuration dialog."""
         dialog = QDialog(self)
         dialog.setWindowTitle("Monitor Properties")
-        dialog.setGeometry(100, 100, 300, 200)
+        dialog.setMinimumWidth(360)
 
-        layout = QVBoxLayout()
-
-        layout.addWidget(QLabel("UDPM URL:"))
         udpm_edit = QLineEdit(self.udpm_url)
         udpm_edit.setReadOnly(True)
-        layout.addWidget(udpm_edit)
 
-        layout.addWidget(QLabel("Refresh Rate (ms):"))
-        refresh_edit = QLineEdit(str(self.update_rate_ms))
-        layout.addWidget(refresh_edit)
+        rate_spin = QSpinBox()
+        rate_spin.setRange(50, 60_000)
+        rate_spin.setSuffix(" ms")
+        rate_spin.setValue(self.update_rate_ms)
 
-        layout.addWidget(QLabel("Statistics Window (samples):"))
-        samples_edit = QLineEdit(str(self.spy.n_samples))
-        layout.addWidget(samples_edit)
+        samples_spin = QSpinBox()
+        samples_spin.setRange(2, 10_000)
+        samples_spin.setValue(self.spy.n_samples)
 
-        def save_settings():
-            try:
-                new_rate = int(refresh_edit.text())
-                new_samples = max(2, min(10000, int(samples_edit.text())))
-            except ValueError:
-                return
+        form = QFormLayout()
+        form.addRow("UDPM URL:", udpm_edit)
+        form.addRow("Refresh rate:", rate_spin)
+        form.addRow("Statistics window:", samples_spin)
 
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+
+        layout = QVBoxLayout(dialog)
+        layout.addLayout(form)
+        layout.addWidget(buttons)
+
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        new_rate = rate_spin.value()
+        new_samples = samples_spin.value()
+        if new_rate != self.update_rate_ms:
             self.update_rate_ms = new_rate
-            self.update_timer.stop()
             self.update_timer.start(self.update_rate_ms)
-
-            if new_samples != self.spy.n_samples:
-                self.spy.set_sample_window(new_samples)
-
-            dialog.close()
-
-        save_button = QPushButton("Save")
-        save_button.clicked.connect(save_settings)
-        layout.addWidget(save_button)
-
-        dialog.setLayout(layout)
-        dialog.exec()
+        if new_samples != self.spy.n_samples:
+            self.spy.set_sample_window(new_samples)
 
     def _lcm_handler_loop(self):
         """Background thread for handling LCM messages."""
