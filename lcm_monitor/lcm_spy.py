@@ -226,6 +226,17 @@ class LCMMessageSpy:
             active=active, total_bw=total_bw, bw_unit=total_unit, generation=gen,
         )
 
+    def get_channel_meta(self):
+        """Snapshot ``{channel: (type_name, decodable_bool)}`` for joining with HostSpy rows."""
+        with self.lock:
+            return {
+                ch: (
+                    t.__name__ if t else "Unknown",
+                    self.msg.get(ch) is not None,
+                )
+                for ch, t in self.channel_type.items()
+            }
+
     def clear(self):
         """Clear all statistics and message data."""
         with self.lock:

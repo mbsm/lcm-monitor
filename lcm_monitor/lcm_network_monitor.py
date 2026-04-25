@@ -13,13 +13,15 @@ from PyQt5.QtWidgets import (
     QMainWindow, QVBoxLayout, QLabel, QLineEdit,
     QAction, QFileDialog, QDialog, QApplication, QStackedWidget,
     QSpinBox, QFormLayout, QDialogButtonBox, QMenu,
+    QSplitter, QListWidget, QListWidgetItem,
 )
 from PyQt5.QtCore import QTimer, Qt, QSettings
 from PyQt5.QtGui import QColor, QKeySequence
 
 from lcm_monitor.theme import DARK, app_stylesheet, qpalette
-from lcm_monitor.utils import get_cmd_option
+from lcm_monitor.utils import format_bandwidth, get_cmd_option
 from lcm_monitor.lcm_spy import COLUMNS, LCMMessageSpy, DECODABLE_COL, sort_traffic_data
+from lcm_monitor.host_spy import HostSpy
 from lcm_monitor.inspector_window import MessageInspectorWindow
 
 
@@ -49,10 +51,15 @@ class MainWindow(QMainWindow):
 
         self.lcm = lcm.LCM(self.udpm_url)
         self.spy = LCMMessageSpy(self.DEFAULT_N_SAMPLES, types_path=types_path)
+        self.host_spy = HostSpy(self.udpm_url, self.DEFAULT_N_SAMPLES)
         self.running = True
         self.subscription = self.lcm.subscribe(".*", self.spy.handle_message)
-        self._last_generation = -1
+        self._last_spy_gen = -1
+        self._last_host_gen = -1
+        self._last_hosts_gen = -1
         self._connection_active = None
+        self._selected_host_ip = None  # None = "All hosts"
+        self._host_items = {}  # ip -> QListWidgetItem
 
         self.setWindowTitle(f"LCM Network Monitor - {udpm_url}")
         self.setMinimumSize(800, 400)
@@ -63,6 +70,7 @@ class MainWindow(QMainWindow):
 
         self.lcm_thread = threading.Thread(target=self._lcm_handler_loop, daemon=True)
         self.lcm_thread.start()
+        self.host_spy.start()
 
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._update_display)
@@ -99,7 +107,24 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.traffic_table)
         self.stack.addWidget(self.empty_label)
         self.stack.setCurrentWidget(self.empty_label)
-        self.setCentralWidget(self.stack)
+
+        self.hosts_list = QListWidget()
+        self.hosts_list.setObjectName("HostsPanel")
+        self.hosts_list.setMinimumWidth(180)
+        self.hosts_list.itemSelectionChanged.connect(self._on_host_selection_changed)
+
+        self._all_hosts_item = QListWidgetItem("All hosts")
+        self._all_hosts_item.setData(Qt.UserRole, None)
+        self.hosts_list.addItem(self._all_hosts_item)
+        self.hosts_list.setCurrentItem(self._all_hosts_item)
+
+        splitter = QSplitter(Qt.Horizontal)
+        splitter.addWidget(self.hosts_list)
+        splitter.addWidget(self.stack)
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
+        splitter.setSizes([220, 800])
+        self.setCentralWidget(splitter)
 
         status_bar = self.statusBar()
         status_bar.showMessage('Ready', 5000)
@@ -201,7 +226,8 @@ class MainWindow(QMainWindow):
         else:
             self.sort_ascending = True
             self.current_sort_column = column
-        self._last_generation = -1
+        self._last_spy_gen = -1
+        self._last_host_gen = -1
         self._update_display()
 
     def _import_types(self):
@@ -219,11 +245,19 @@ class MainWindow(QMainWindow):
         settings = QSettings("LCMMonitor", "MainWindow")
         settings.setValue("geometry", self.saveGeometry())
         self.running = False
+        self.host_spy.stop()
         event.accept()
 
     def _clear_statistics(self):
         """Clear all accumulated channel statistics."""
         self.spy.clear()
+        self.host_spy.clear()
+        for ip, item in self._host_items.items():
+            row = self.hosts_list.row(item)
+            if row >= 0:
+                self.hosts_list.takeItem(row)
+        self._host_items.clear()
+        self._last_hosts_gen = -1
 
     def _open_inspector_window(self, row, col):
         """Open message inspector window for selected channel."""
@@ -296,21 +330,79 @@ class MainWindow(QMainWindow):
                 )
                 self.connection_indicator.setToolTip("Idle")
 
-        # Skip expensive table rebuild if data hasn't changed
-        if data.generation == self._last_generation:
-            return
-        self._last_generation = data.generation
+        self._update_hosts_panel()
 
-        rows = data.rows
+        if self._selected_host_ip is None:
+            # Unfiltered: drive table from LCMMessageSpy.
+            if data.generation == self._last_spy_gen:
+                return
+            self._last_spy_gen = data.generation
+            rows, has_data = data.rows, data.has_data
+        else:
+            # Filtered: drive table from HostSpy joined with LCMMessageSpy meta.
+            if self.host_spy.generation == self._last_host_gen:
+                return
+            self._last_host_gen = self.host_spy.generation
+            rows = self.host_spy.get_channel_rows(
+                self._selected_host_ip, self.spy.get_channel_meta()
+            )
+            has_data = bool(rows)
+
         if self.current_sort_column is not None:
             rows = sort_traffic_data(rows, self.current_sort_column, self.sort_ascending)
 
-        if data.has_data:
+        if has_data:
             self.stack.setCurrentWidget(self.traffic_table)
             self.traffic_table.setData(rows)
             self._apply_table_formatting()
         else:
             self.stack.setCurrentWidget(self.empty_label)
+
+    def _update_hosts_panel(self):
+        """Refresh the hosts list with the latest per-host summary."""
+        host_rows, gen = self.host_spy.get_host_summary()
+        if gen == self._last_hosts_gen:
+            return
+        self._last_hosts_gen = gen
+
+        seen = set()
+        for row in host_rows:
+            ip = row["ip"]
+            seen.add(ip)
+            bw_value, bw_unit = format_bandwidth(row["total_kbps"])
+            label = f"●  {ip}    {bw_value:.1f} {bw_unit}"
+            color = QColor(STATUS_ACTIVE if row["active"] else STATUS_IDLE)
+
+            item = self._host_items.get(ip)
+            if item is None:
+                item = QListWidgetItem(label)
+                item.setData(Qt.UserRole, ip)
+                item.setToolTip(
+                    f"{ip}\n{row['channel_count']} channel(s)\n{row['msg_count']} packets"
+                )
+                self.hosts_list.addItem(item)
+                self._host_items[ip] = item
+            else:
+                item.setText(label)
+                item.setToolTip(
+                    f"{ip}\n{row['channel_count']} channel(s)\n{row['msg_count']} packets"
+                )
+            item.setForeground(color)
+
+        # If the previously selected host disappeared (e.g. after Clear), fall back to "All hosts".
+        if self._selected_host_ip is not None and self._selected_host_ip not in seen:
+            self.hosts_list.setCurrentItem(self._all_hosts_item)
+
+    def _on_host_selection_changed(self):
+        items = self.hosts_list.selectedItems()
+        new_ip = items[0].data(Qt.UserRole) if items else None
+        if new_ip == self._selected_host_ip:
+            return
+        self._selected_host_ip = new_ip
+        # Force a redraw on the next tick regardless of which source is active.
+        self._last_spy_gen = -1
+        self._last_host_gen = -1
+        self._update_display()
 
     def _show_properties_dialog(self):
         """Show properties configuration dialog."""
@@ -353,6 +445,7 @@ class MainWindow(QMainWindow):
             self.update_timer.start(self.update_rate_ms)
         if new_samples != self.spy.n_samples:
             self.spy.set_sample_window(new_samples)
+            self.host_spy.set_sample_window(new_samples)
 
     def _lcm_handler_loop(self):
         """Background thread for handling LCM messages."""
