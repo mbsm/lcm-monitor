@@ -101,6 +101,7 @@ class HostSpy:
         self.n_samples = n_samples
         self.host_stats = {}
         self.host_channels = defaultdict(dict)  # ip -> {channel: ChannelStats}
+        self.channel_stats = {}                  # channel -> ChannelStats (across hosts)
         self.lock = threading.Lock()
         self.generation = 0
 
@@ -182,6 +183,13 @@ class HostSpy:
                     ch_stats = ChannelStats(self.n_samples)
                     channels[channel] = ch_stats
                 ch_stats.update(attrib_size)
+
+                agg_stats = self.channel_stats.get(channel)
+                if agg_stats is None:
+                    agg_stats = ChannelStats(self.n_samples)
+                    self.channel_stats[channel] = agg_stats
+                agg_stats.update(attrib_size)
+
                 self.generation += 1
 
     def set_sample_window(self, n_samples):
@@ -190,11 +198,14 @@ class HostSpy:
             for channels in self.host_channels.values():
                 for ch_stats in channels.values():
                     ch_stats.resize(n_samples)
+            for ch_stats in self.channel_stats.values():
+                ch_stats.resize(n_samples)
 
     def clear(self):
         with self.lock:
             self.host_stats.clear()
             self.host_channels.clear()
+            self.channel_stats.clear()
             self.generation += 1
 
     def get_host_summary(self):
@@ -221,30 +232,37 @@ class HostSpy:
         return rows, gen
 
     def get_channel_rows(self, ip, channel_meta):
-        """Build display rows for one host, joined with metadata from LCMMessageSpy.
-
-        ``channel_meta`` maps ``channel -> (type_name, decodable_bool)`` so the
-        Type / Decodable columns line up with the unfiltered view.
-        """
-        rows = []
+        """Display rows for one host, joined with metadata from LCMMessageSpy."""
         with self.lock:
             channels = list(self.host_channels.get(ip, {}).items())
+        return [_build_row(ch, st, channel_meta) for ch, st in channels]
 
-        for channel, stats in channels:
-            period = stats.period()
-            hz = 1 / period if period > 0 else 0
-            jitter_ms = stats.jitter() * 1000
-            bw_kbps = stats.bandwidth_kbps()
-            bw_value, bw_unit = format_bandwidth(bw_kbps)
-            type_name, decodable = channel_meta.get(channel, ("Unknown", False))
-            rows.append({
-                "Channel": channel,
-                "Type": type_name,
-                "Num Msgs": stats.hits,
-                "Hz": f"{hz:.2f}",
-                "1/Hz": f"{period * 1000:.2f} ms",
-                "Jitter": f"{jitter_ms:.2f} ms",
-                "Bandwidth": f"{bw_value:.2f} {bw_unit}",
-                "Decodable": "True" if decodable else "False",
-            })
-        return rows
+    def get_aggregate_rows(self, channel_meta):
+        """Display rows aggregated across all hosts.
+
+        Used for the unfiltered view so jitter is derived from raw-socket
+        timestamps (wire arrival) instead of LCMMessageSpy's polled dispatch
+        cadence, which tends to clump messages into 100 ms batches.
+        """
+        with self.lock:
+            channels = list(self.channel_stats.items())
+        return [_build_row(ch, st, channel_meta) for ch, st in channels]
+
+
+def _build_row(channel, stats, channel_meta):
+    """Format one ChannelStats as a row for the traffic table."""
+    period = stats.period()
+    hz = 1 / period if period > 0 else 0
+    jitter_ms = stats.jitter() * 1000
+    bw_value, bw_unit = format_bandwidth(stats.bandwidth_kbps())
+    type_name, decodable = channel_meta.get(channel, ("Unknown", False))
+    return {
+        "Channel": channel,
+        "Type": type_name,
+        "Num Msgs": stats.hits,
+        "Hz": f"{hz:.2f}",
+        "1/Hz": f"{period * 1000:.2f} ms",
+        "Jitter": f"{jitter_ms:.2f} ms",
+        "Bandwidth": f"{bw_value:.2f} {bw_unit}",
+        "Decodable": "True" if decodable else "False",
+    }

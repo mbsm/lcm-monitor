@@ -54,8 +54,7 @@ class MainWindow(QMainWindow):
         self.host_spy = HostSpy(self.udpm_url, self.DEFAULT_N_SAMPLES)
         self.running = True
         self.subscription = self.lcm.subscribe(".*", self.spy.handle_message)
-        self._last_spy_gen = -1
-        self._last_host_gen = -1
+        self._last_table_gen = -1
         self._last_hosts_gen = -1
         self._connection_active = None
         self._selected_host_ip = None  # None = "All hosts"
@@ -70,7 +69,7 @@ class MainWindow(QMainWindow):
 
         self.lcm_thread = threading.Thread(target=self._lcm_handler_loop, daemon=True)
         self.lcm_thread.start()
-        self.host_spy.start()
+        self._host_spy_active = self.host_spy.start()
 
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._update_display)
@@ -226,8 +225,7 @@ class MainWindow(QMainWindow):
         else:
             self.sort_ascending = True
             self.current_sort_column = column
-        self._last_spy_gen = -1
-        self._last_host_gen = -1
+        self._last_table_gen = -1
         self._update_display()
 
     def _import_types(self):
@@ -332,20 +330,27 @@ class MainWindow(QMainWindow):
 
         self._update_hosts_panel()
 
-        if self._selected_host_ip is None:
-            # Unfiltered: drive table from LCMMessageSpy.
-            if data.generation == self._last_spy_gen:
-                return
-            self._last_spy_gen = data.generation
+        # Drive the table from HostSpy when available so jitter reflects raw
+        # socket arrival times. LCMMessageSpy's timestamps are skewed by the
+        # 100 ms handle_timeout dispatch cadence, which inflates the
+        # cross-host jitter number under load. Fall back to LCMMessageSpy if
+        # the multicast socket couldn't be opened.
+        if not self._host_spy_active:
+            new_gen = data.generation
+        else:
+            new_gen = self.host_spy.generation
+        if new_gen == self._last_table_gen:
+            return
+        self._last_table_gen = new_gen
+
+        if not self._host_spy_active:
             rows, has_data = data.rows, data.has_data
         else:
-            # Filtered: drive table from HostSpy joined with LCMMessageSpy meta.
-            if self.host_spy.generation == self._last_host_gen:
-                return
-            self._last_host_gen = self.host_spy.generation
-            rows = self.host_spy.get_channel_rows(
-                self._selected_host_ip, self.spy.get_channel_meta()
-            )
+            meta = self.spy.get_channel_meta()
+            if self._selected_host_ip is None:
+                rows = self.host_spy.get_aggregate_rows(meta)
+            else:
+                rows = self.host_spy.get_channel_rows(self._selected_host_ip, meta)
             has_data = bool(rows)
 
         if self.current_sort_column is not None:
@@ -399,9 +404,7 @@ class MainWindow(QMainWindow):
         if new_ip == self._selected_host_ip:
             return
         self._selected_host_ip = new_ip
-        # Force a redraw on the next tick regardless of which source is active.
-        self._last_spy_gen = -1
-        self._last_host_gen = -1
+        self._last_table_gen = -1  # force a redraw on the next tick
         self._update_display()
 
     def _show_properties_dialog(self):
